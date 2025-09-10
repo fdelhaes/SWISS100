@@ -6,6 +6,11 @@ Our research identified a robust set of aging-associated proteins (APs) that are
 
 Replicating associations of 23 proteins with a standard set of APs developed by the Targeting Aging with Metformin (TAME) consortium.
 
-Identifying 135 differentially expressed proteins (DEPs) with consistent aging directions through comparison with an independent centenarian proteomics study.
+Identifying 135 differentially expressed proteins (DEPs) with consistent aging directions through comparison with an independent centenarian proteomics study (New England Centenarian Study, NECS).
 
 Furthermore, applying fractional polynomial regressions, we uncovered proteins with linear and non-linear age-associated profiles and identified a subgroup of 37 proteins exhibiting a "younger" signature in centenarians. Pathway enrichment analyses of these 37 proteins highlighted critical processes such as programmed cell death, metabolic enzyme pathways, regulation of extracellular matrix stability, immune and inflammatory responses, and neurotrophic signaling pathways.
+
+
+SWISS100 website:
+https://wp.unil.ch/swiss100/en/
+
