@@ -12,5 +12,6 @@ Furthermore, applying fractional polynomial regressions, we uncovered proteins w
 
 
 SWISS100 website:
-https://wp.unil.ch/swiss100/en/
+https://wp.unil.ch/swiss100/
+
 
