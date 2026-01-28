@@ -1,0 +1,781 @@
+---
+title: "SWISS100_OLINK_BIOMARKERS"
+author: "Delhaes Flavien"
+date: "2024-07-26"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls())
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+#Load packages and data
+```{r}
+if(!require(pacman))install.packages("pacman")
+pacman::p_load(readxl,
+							 OlinkAnalyze,
+							 tidyverse,
+							 RColorBrewer,
+							 ggrepel,
+							 gtsummary,
+							 here,
+							 xlsx,
+							 gt,
+							 ComplexHeatmap)
+
+data1 <- read_excel("data/Univ_of_Geneve_Dept_of_Pathology_and_Immunology_NPX_2024-01-24.xlsx", sheet = "1.Group-sex-site (Text)")
+glimpse(data1)
+print(data1)
+
+```
+#===========================================================================================
+# 3 sites (GENEVA, TICINO, ZURICH) - 3 groups (HEALTHY, GERIATRIC, CENTENARIAN)
+#===========================================================================================
+#Preprocessing: removed #N/A data, QCX and Assay warning, hemolysed samples, format data
+```{r}
+#Remove hemolysed samples identified by Firalis; Remove of NA
+data_all_cleaned <- filter(data1, `Plasma sample_ID` != "#N/A",
+													 QC_Warning !="EXCLUDED", 
+													 Assay_Warning !="EXCLUDED", 
+													 data1$`Plasma sample_ID` !="S100-VD-C-0368", #Hemolyzed
+													 data1$`Plasma sample_ID` !="S100-GE-G-0038", #Hemolyzed
+													 data1$`Plasma sample_ID` !="S100-GE-G-0059", #Hemolyzed
+													 data1$`Plasma sample_ID` !="S100-GE-H-0015", #Hemolyzed
+													 data1$SampleID != "F2313550", #QC outliers : based on Interquartile ranges and sample median
+													 data1$SampleID != "F2313559", #QC outliers : based on Interquartile ranges and sample
+													 data1$SampleID != "F2313498", #QC outliers : based on Interquartile ranges and sample
+													 Assay != "PNLIPRP2")
+
+glimpse(data_all_cleaned)
+data_all_cleaned <- dplyr::rename(data_all_cleaned,
+                Participant_id = `Plasma sample_ID`,
+								Sex = `1. Subject sex`,
+								Age = `1. Subject age`,
+								Ethnicity = `1.Ethnicity origin`, 
+                Site = `Collection-Processing site`,
+								Delta_storage = `Delta storage (H:M:S)_Hour`,
+								Delta_breakfast = `Delta Breakfast (H:M:S)_Hour`,
+								Delta_processing = `Delta processing (H:M:S)_Hour`
+                )
+
+
+data_all_cleaned$Age <- as.numeric(data_all_cleaned$Age)
+data_all_cleaned$NPX <- as.numeric(data_all_cleaned$NPX)
+data_all_cleaned$Group <- as.factor(data_all_cleaned$Group)
+data_all_cleaned$Sex <- as.factor(data_all_cleaned$Sex)
+data_all_cleaned$Site <- as.factor(data_all_cleaned$Site)
+data_all_cleaned$OlinkID <- as.factor(data_all_cleaned$OlinkID)
+
+glimpse(data_all_cleaned)
+
+data_all_cleaned |>
+summarize(n_distinct(QC_Warning),n_distinct(Assay_Warning))
+select(data_all_cleaned, c(QC_Warning, Assay_Warning, )) %>%
+tbl_summary
+
+```
+
+
+#Exploratory analysis: PCA Data formating
+```{r}
+#Exploratory analysis: PCA (Extract NPX matrix and metadata dataframe)
+# Pivot the full table to run PCA
+X <- data_all_cleaned |>
+	pivot_wider(
+		id_cols = c("SampleID","Sex","Age","Group","Ethnicity","Site"),
+		names_from = c("Panel","Assay"),
+		values_from = "NPX"
+	) |>
+	filter(!is.na(Group))
+
+# Extract NPX matrix and metadata dataframe
+NPX <- data.matrix(select(X,!1:"Site"))
+META <- select(X,1:"Site")
+
+print(X)
+```
+
+
+#Exploratory analysis: PCA - 3 sites [Article_Fig.S2]
+```{r}
+# 1. Perform PCA using prcomp (centering and scaling the data is recommended)
+pca_result <- prcomp(NPX, center = FALSE, scale. = TRUE) #Centering is optional for NPX data since it's already log-transformed and likely centered around a mean value.
+
+# View summary of PCA results
+summary(pca_result)
+
+# Extract PCA scores for the first two principal components
+pca_scores <- as.data.frame(pca_result$x)
+
+# Add Group, Sex and Site information back
+pca_scores$Group <- META$Group
+pca_scores$Sex <- META$Sex
+pca_scores$Site <- META$Site
+
+# Plot PCA results with the "Group" column for visualization.
+pca_plot_Group <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Group)) +
+  geom_point(size = 2) + 
+  theme_minimal() +
+  ggtitle("PCA - 3 sites - Group ") +
+  xlab(paste0("PC1 (", round(summary(pca_result)$importance[2,1] * 100, 2), "%)")) +
+  ylab(paste0("PC2 (", round(summary(pca_result)$importance[2,2] * 100, 2), "%)")) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),           # Remove the grey grid
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),  # Add black border
+  ) +
+  scale_color_manual(values = c("Healthy" = "#93C83E",
+                                "Geriatric" = "#EE3224", 
+                                "Centenarian" = "#007BA7"))
+print(pca_plot_Group)
+
+
+# Plot PCA results with the "Sex" column for visualization.
+pca_plot_Sex <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Sex)) +
+  geom_point(size = 2) + 
+  theme_minimal() +
+  ggtitle("PCA - 3 sites - Sex ") +
+  xlab(paste0("PC1 (", round(summary(pca_result)$importance[2,1] * 100, 2), "%)")) +
+  ylab(paste0("PC2 (", round(summary(pca_result)$importance[2,2] * 100, 2), "%)")) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),           # Remove the grey grid
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),  # Add black border
+  )
+print(pca_plot_Sex)
+
+# Plot PCA results with the "Site" column for visualization.
+pca_plot_Site <- ggplot(pca_scores, aes(x = PC1, y = PC2, color = Site)) +
+  geom_point(size = 2) + 
+  theme_minimal() +
+  ggtitle("PCA - 3 sites - Site ") +
+  xlab(paste0("PC1 (", round(summary(pca_result)$importance[2,1] * 100, 2), "%)")) +
+  ylab(paste0("PC2 (", round(summary(pca_result)$importance[2,2] * 100, 2), "%)")) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),           # Remove the grey grid
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),  # Add black border
+  ) +
+  scale_color_manual(values = c(
+    "Ticino" = "#1b485e", 
+		"Zurich" = "#568b87", 
+		"Geneva" = "#b5d1ae"))
+print(pca_plot_Site)
+
+
+
+
+```
+
+#Statistical analysis: DEPs Identification ANOVA+Posthoc/comparison 3 groups - 3 sites [Article_Table_S6]
+```{r}
+# -------------------------------------------------------------------------
+# 1. Setup and Initial ANOVA
+# -------------------------------------------------------------------------
+
+# Relevel the Group factor to set "Centenarian" as the reference level
+data_all_cleaned$Group <- relevel(data_all_cleaned$Group, "Centenarian")
+
+# Calculate the p-value for the ANOVA - Comparison ALL groups
+anova_results_data_all_cleaned_3G_3S <- olink_anova(
+    df = data_all_cleaned,
+    variable = c('Group')
+)
+
+# -------------------------------------------------------------------------
+# 2. Post-hoc Analysis and Filtering
+# -------------------------------------------------------------------------
+
+# Extract the OlinkIDs of significant proteins
+anova_results_sig_data_all_cleaned_3G_3S <- anova_results_data_all_cleaned_3G_3S %>%
+    filter(Threshold == 'Significant') %>%
+    pull(OlinkID)
+
+# Calculate the post-hoc results for significant proteins
+anova_posthoc_data_all_cleaned_3G_3S <- olink_anova_posthoc(
+    df = data_all_cleaned,
+    olinkid_list = anova_results_sig_data_all_cleaned_3G_3S,
+    variable = c('Group'),
+    effect = 'Group'
+)
+
+# -------------------------------------------------------------------------
+# 3. Automated Group Comparison Processing
+# -------------------------------------------------------------------------
+
+# Define the contrasts to process
+contrasts_to_process <- c(
+    "Centenarian - Healthy",
+    "Centenarian - Geriatric",
+    "Geriatric - Healthy"
+)
+
+# Define the base output path
+base_path <- "outputs/ANOVA_3Groups/3Sites/SWISS100_APH_3G_All_sites_filter_"
+
+# Function to perform the repeated steps (Filter, Rename, Mutate, Save)
+process_and_save_contrast <- function(contrast_name) {
+    
+    # 1. Prepare a safe filename suffix
+    # (Replaces " - " with "_" to create valid file names)
+    file_suffix <- gsub(" - ", "_", contrast_name)
+    
+    # 2. Filter the group of interest
+    df_filtered <- anova_posthoc_data_all_cleaned_3G_3S %>%
+        filter(contrast == contrast_name)
+    
+    # 3. Rename the column "estimate" to "log2FoldChange"
+    df_processed <- df_filtered %>%
+        rename(log2FoldChange = estimate)
+    
+    # 4. Convert 0 p-values to a minimum threshold (1e-16)
+    df_processed <- df_processed %>%
+        mutate(Adjusted_pval = ifelse(Adjusted_pval == 0, 1e-16, Adjusted_pval))
+    
+    # 5. Save as an Excel file
+    output_filename <- paste0(base_path, tolower(file_suffix),".xlsx")
+
+    writexl::write_xlsx(x = df_processed, path = output_filename)
+
+    return(df_processed) # Return the processed data frame
+}
+
+# Apply the function to all desired contrasts using lapply
+# This executes the loop and saves the three files
+list_of_processed_dfs <- lapply(contrasts_to_process, process_and_save_contrast)
+
+# Optionally, you can name the elements in the list for later reference
+names(list_of_processed_dfs) <- contrasts_to_process
+
+# -------------------------------------------------------------------------
+# 4. Write the named list to a single Excel file
+# -------------------------------------------------------------------------
+# The sheet names will be: "Centenarian - Healthy", "Centenarian - Geriatric", and "Geriatric - Healthy"
+# writexl::write_xlsx(
+#     x = list_of_processed_dfs,
+#     path = "outputs/ANOVA_3Groups/3Sites/SWISS100_APH_3G_All_sites_filter_CONTRASTS_COMBINED.xlsx"
+# )
+```
+
+=========================================================================================
+# 2 sites (GENEVA, TICINO) - 3 groups (HEALTHY, GERIATRIC, CENTENARIAN)
+#===========================================================================================
+
+#Exploratory analysis: PCA - 2 sites (Extract NPX matrix and metadata dataframe)
+```{r}
+# Pivot the full table to run PCA
+X_geneva_ticino <- data_all_cleaned |>
+	pivot_wider(
+		id_cols = c("SampleID","Sex","Age","Group","Ethnicity","Site"),
+		names_from = c("Panel","Assay"),
+		values_from = "NPX"
+	) |>
+	filter(!is.na(Group)) |> 
+  filter(Site != "Zurich")
+
+# Extract NPX matrix and metadata dataframe
+NPX_geneva_ticino <- data.matrix(select(X_geneva_ticino,!1:"Site"))
+META_geneva_ticino <- select(X_geneva_ticino,1:"Site")
+```
+
+
+#Exploratory analysis: PCA - 2 sites [Article_Fig.S2]
+```{r}
+
+# 1. Perform PCA using prcomp (centering and scaling the data is recommended)
+pca_result_geneva_ticino <- prcomp(NPX_geneva_ticino, center = FALSE, scale. = TRUE) #Centering is optional for NPX_geneva_ticino data since it's already log-transformed and likely centered around a mean value.
+
+# View summary of PCA results
+summary(pca_result_geneva_ticino)
+
+# Extract PCA scores for the first two principal components
+pca_scores_geneva_ticino <- as.data.frame(pca_result_geneva_ticino$x)
+
+# Add Group, Sex and Site information back
+pca_scores_geneva_ticino$Group <- META_geneva_ticino$Group
+pca_scores_geneva_ticino$Sex <- META_geneva_ticino$Sex
+pca_scores_geneva_ticino$Site <- META_geneva_ticino$Site
+
+# Plot PCA results with the "Group" column for visualization.
+pca_plot_Group_geneva_ticino <- ggplot(pca_scores_geneva_ticino, aes(x = PC1, y = PC2, color = Group)) +
+  geom_point(size = 2) + 
+  theme_minimal() +
+  ggtitle("PCA - 2 sites - Group ") +
+  xlab(paste0("PC1 (", round(summary(pca_result_geneva_ticino)$importance[2,1] * 100, 2), "%)")) +
+  ylab(paste0("PC2 (", round(summary(pca_result_geneva_ticino)$importance[2,2] * 100, 2), "%)")) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),           # Remove the grey grid
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),  # Add black border
+  ) +
+  scale_color_manual(values = c("Healthy" = "#93C83E",
+                                "Geriatric" = "#EE3224", 
+                                "Centenarian" = "#007BA7"))
+print(pca_plot_Group_geneva_ticino)
+
+
+# Plot PCA results with the "Sex" column for visualization.
+pca_plot_Sex_geneva_ticino <- ggplot(pca_scores_geneva_ticino, aes(x = PC1, y = PC2, color = Sex)) +
+  geom_point(size = 2) + 
+  theme_minimal() +
+  ggtitle("PCA - 2 sites - Sex ") +
+  xlab(paste0("PC1 (", round(summary(pca_result_geneva_ticino)$importance[2,1] * 100, 2), "%)")) +
+  ylab(paste0("PC2 (", round(summary(pca_result_geneva_ticino)$importance[2,2] * 100, 2), "%)")) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),           # Remove the grey grid
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),  # Add black border
+  )
+print(pca_plot_Sex_geneva_ticino)
+
+# Plot PCA results with the "Site" column for visualization.
+pca_plot_Site_geneva_ticino <- ggplot(pca_scores_geneva_ticino, aes(x = PC1, y = PC2, color = Site)) +
+  geom_point(size = 2) + 
+  theme_minimal() +
+  ggtitle("PCA - 2 sites - Site ") +
+  xlab(paste0("PC1 (", round(summary(pca_result_geneva_ticino)$importance[2,1] * 100, 2), "%)")) +
+  ylab(paste0("PC2 (", round(summary(pca_result_geneva_ticino)$importance[2,2] * 100, 2), "%)")) +
+  theme_minimal() +
+  theme(
+    panel.grid = element_blank(),           # Remove the grey grid
+    panel.border = element_rect(color = "black", fill = NA, size = 0.5),  # Add black border
+  ) +
+  scale_color_manual(values = c(
+    "Ticino" = "#1b485e", 
+		"Zurich" = "#568b87", 
+		"Geneva" = "#b5d1ae"))
+
+print(pca_plot_Site_geneva_ticino)
+
+```
+
+
+#Sites filtering: 2 sites Geneva&Ticino
+```{r}
+
+# Filter Geneva and Ticino
+data_geneva_ticino <- filter(data_all_cleaned, Site != "Zurich")
+
+glimpse(data_geneva_ticino)
+head(data_geneva_ticino)
+```
+
+#Statistical analysis: DEPs Identification ANOVA+Posthoc/comparison 3 groups - 2 sites Geneva&Ticino [Article_Table_S2]
+```{r}
+#install.packages("writexl")
+#library(writexl)
+
+#Relevel the Group factor to set "Centenarian" as the reference level:
+data_geneva_ticino$Group <- relevel(data_geneva_ticino$Group, "Centenarian")
+
+# Calculate the p-value for the ANOVA - Comparison ALL groups (Healthy, Geriatric, Centenarian) 
+anova_results_data_geneva_ticino <- olink_anova(
+  df = data_geneva_ticino, 
+  variable = c('Group')
+)
+
+# Extracting the significant proteins
+anova_results_sig_data_geneva_ticino <- anova_results_data_geneva_ticino %>%
+	filter(Threshold == 'Significant') %>%
+  pull(OlinkID)
+
+anova_posthoc_data_geneva_ticino <- olink_anova_posthoc(
+  df = data_geneva_ticino,
+  olinkid_list = anova_results_sig_data_geneva_ticino,
+  variable = c('Group'),
+  effect = 'Group'
+)
+
+print(anova_posthoc_data_geneva_ticino)
+head(anova_posthoc_data_geneva_ticino)
+
+#===============================================================================
+#"Centenarian - Healthy"
+#===============================================================================
+
+#Filter group of interest
+anova_posthoc_data_geneva_ticino_cent_healthy <- filter(anova_posthoc_data_geneva_ticino, 
+                                                        contrast == "Centenarian - Healthy")
+
+#Rename the column "estimate" to "log2FoldChange" in the dataframe
+anova_posthoc_data_geneva_ticino_cent_healthy <- anova_posthoc_data_geneva_ticino_cent_healthy %>%
+rename(log2FoldChange = estimate)
+
+# Convert Small Values to a Minimum Threshold: replace 0 values with a small number 1×10-16
+anova_posthoc_data_geneva_ticino_cent_healthy <- anova_posthoc_data_geneva_ticino_cent_healthy %>%
+   mutate(Adjusted_pval = ifelse(Adjusted_pval == 0, 1e-16, Adjusted_pval))
+
+
+#===============================================================================
+#"Centenarian - Geriatric"
+#===============================================================================
+
+#Filter group of interest
+anova_posthoc_data_geneva_ticino_cent_geriatric <- filter(anova_posthoc_data_geneva_ticino, 
+                                                          contrast == "Centenarian - Geriatric")
+ 
+
+# Rename the column "estimate" to "log2FoldChange" in the dataframe
+anova_posthoc_data_geneva_ticino_cent_geriatric <- anova_posthoc_data_geneva_ticino_cent_geriatric %>%
+   rename(log2FoldChange = estimate)
+
+# Convert Small Values to a Minimum Threshold: replace 0 values with a small number 1×10-16
+anova_posthoc_data_geneva_ticino_cent_geriatric <- anova_posthoc_data_geneva_ticino_cent_geriatric %>%
+   mutate(Adjusted_pval = ifelse(Adjusted_pval == 0, 1e-16, Adjusted_pval))
+
+#===============================================================================
+#"Geriatric - Healthy"
+#===============================================================================
+
+#Filter group of interest
+anova_posthoc_data_geneva_ticino_geriatric_healthy <- filter(anova_posthoc_data_geneva_ticino, contrast == "Geriatric - Healthy")
+
+# Rename the column "estimate" to "log2FoldChange" in the dataframe
+anova_posthoc_data_geneva_ticino_geriatric_healthy <- anova_posthoc_data_geneva_ticino_geriatric_healthy %>%
+   rename(log2FoldChange = estimate)
+
+# Convert Small Values to a Minimum Threshold: replace 0 values with a small number 1×10-16
+anova_posthoc_data_geneva_ticino_geriatric_healthy <- anova_posthoc_data_geneva_ticino_geriatric_healthy %>%
+   mutate(Adjusted_pval = ifelse(Adjusted_pval == 0, 1e-16, Adjusted_pval))
+
+```
+
+#Visualization: Volcano plot_Enhanced [Article_Figure_1]
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(EnhancedVolcano)
+library(openxlsx)
+
+# Ensure 'OlinkID' is a factor
+data_geneva_ticino$OlinkID <- as.factor(data_geneva_ticino$OlinkID)
+
+# Filter and drop unused factor levels for pairwise comparisons
+data_geneva_ticino_cent_healthy <- data_geneva_ticino %>% 
+  filter(Group %in% c("Centenarian", "Healthy")) %>%
+  mutate(Group = droplevels(Group))
+
+data_geneva_ticino_cent_geriatric <- data_geneva_ticino %>% 
+  filter(Group %in% c("Centenarian", "Geriatric")) %>%
+  mutate(Group = droplevels(Group))
+
+data_geneva_ticino_geriatric_healthy <- data_geneva_ticino %>% 
+  filter(Group %in% c("Geriatric", "Healthy")) %>%
+  mutate(Group = droplevels(Group))
+
+# Perform pairwise t-tests
+ttest_results <- list(
+  "Centenarian vs Healthy" = olink_ttest(df = data_geneva_ticino_cent_healthy, variable = 'Group'),
+  "Centenarian vs Geriatric" = olink_ttest(df = data_geneva_ticino_cent_geriatric, variable = 'Group'),
+  "Geriatric vs Healthy" = olink_ttest(df = data_geneva_ticino_geriatric_healthy, variable = 'Group')
+)
+
+# Select top 10 proteins for labeling in plots
+top_10_names <- lapply(ttest_results, function(res) {
+  res %>% slice_head(n = 10) %>% pull(Assay)
+})
+
+# Function to process and generate volcano plots
+process_contrast <- function(results, contrast_name, output_prefix, top_10_labels) {
+  
+  # Ensure results are properly formatted
+  results <- results %>%
+    rename(log2FoldChange = estimate) %>%  # Renaming column
+    mutate(Adjusted_pval = ifelse(Adjusted_pval == 0, 1e-16, Adjusted_pval))  # Replace 0 p-values
+
+  # Check if 'results' contains data; if not, print a message and exit function early
+  if (nrow(results) == 0) {
+    message(paste("No data found for contrast:", contrast_name))
+    return(NULL)
+  }
+
+  # Create volcano plot
+  volcano_plot <- EnhancedVolcano(
+    results,
+    lab = results$Assay,
+    x = 'log2FoldChange',
+    y = 'Adjusted_pval',
+    pCutoff = 0.05,
+    FCcutoff = 0.5,
+    selectLab = top_10_labels,
+    drawConnectors = TRUE,
+    widthConnectors = 0.75,
+    max.overlaps = 50,
+    legendLabels = c('Not sig.', 'log2FoldChange', 'Adjusted_pval', 'Adjusted_pval & log2FoldChange'),
+    labSize = 4,
+    caption = NULL
+  ) + labs(x = "log2(Fold Change)", y = '-log10(Adjusted_pvalue)') +
+    ggtitle(paste(contrast_name, "Comparison")) +
+    theme_classic() +
+    theme(
+      plot.title = element_text(size = 18, face = "bold"),
+      axis.title = element_text(size = 16),
+      axis.text = element_text(size = 14),
+      legend.text = element_text(size = 14),
+      legend.title = element_text(size = 16)
+    )
+
+  # Save plot
+  png(paste0("outputs/ANOVA_3Groups/2Sites/Volcano_plot/SWISS100_Enhanced_volcano_plot_", output_prefix, ".png"),
+      width = 10, height = 8, units = "in", res = 300)
+
+  print(volcano_plot)  
+  dev.off()
+
+  # Save results to Excel
+  write.xlsx(results,
+             file = paste0("outputs/ANOVA_3Groups/2Sites/Volcano_plot/SWISS100_filter_Ttest_", output_prefix, ".xlsx"))
+
+  message(paste("Processed:", contrast_name))
+}
+
+# Define contrasts and their output filenames
+contrast_list <- list(
+  list(name = "Centenarian vs Healthy", output = "cent_healthy_geneva_ticino"),
+  list(name = "Centenarian vs Geriatric", output = "cent_geriatric_geneva_ticino"),
+  list(name = "Geriatric vs Healthy", output = "geriatric_healthy_geneva_ticino")
+)
+
+# Run processing for each contrast
+for (contrast in contrast_list) {
+  process_contrast(
+    results = ttest_results[[contrast$name]],
+    contrast_name = contrast$name,
+    output_prefix = contrast$output,
+    top_10_labels = top_10_names[[contrast$name]]
+  )
+}
+
+
+```
+
+
+#Visualization: Heatmap_Olink_comparison of 3 groups uncorrected [Article_Figure_1]
+```{r}
+library(ggplotify)
+library(pheatmap)
+library(circlize)
+library(grid)
+
+# Select the first 50 unique proteins
+first50proteins_geneva_ticino <- data_geneva_ticino |> 
+  pull(OlinkID) |> 
+  unique() |> 
+  head(50)
+
+# Select the first 176 unique samples
+allsamples_geneva_ticino <- data_geneva_ticino$SampleID |>  
+  unique() |>
+  head(176)
+
+# Filter the data to exclude controls and include only selected proteins and samples
+npx_data_all_geneva_ticino <- data_geneva_ticino |>  
+  filter(!str_detect(SampleID, 'CONT')) |>  
+  filter(OlinkID %in% first50proteins_geneva_ticino) |>  
+  filter(SampleID %in% allsamples_geneva_ticino)
+
+# Define custom colors for Group and Site
+group_colors <- c("Centenarian" = "#007BA7",
+									"Geriatric" = "#EE3224",
+									"Healthy" = "#93C83E")
+
+site_colors <- c("Ticino" = "#1b485e", 
+								 "Geneva" = "#b5d1ae")
+
+# Combine colors into a list
+annotation_colors <- list(
+  Group = group_colors,
+  Site = site_colors
+)
+
+# Define a high-contrast color palette
+high_contrast_palette <- colorRampPalette(c("blue", "white", "red"))(100)
+
+# Create the heatmap plot with customized legend colors
+heatmap_all_geneva_ticino <- olink_heatmap_plot(
+  npx_data_all_geneva_ticino,
+  main = 'Heatmap',         # Add title
+  variable_row_list = c('Group','Site'),
+  colnames = 'assay',
+  fontsize = 20,         # Controls font size for row and column labels
+  annotation_colors = annotation_colors, # Apply custom colors
+  color = high_contrast_palette  # Apply high-contrast color palette
+) 
+
+
+ggsave("outputs/ANOVA_3Groups/2Sites/Heatmap/Swiss100_Heatmap_3G_geneva_ticino.png", plot = heatmap_all_geneva_ticino, width = 8, height = 12)
+
+# Display the heatmap
+heatmap_all_geneva_ticino
+```
+
+#Centenarian signature selection based on APH results - 2 sites - filtered for CENT sig dif from GERIATRIC but not HEALTHY [Article_Fig_S3]
+```{r}
+# Filter dataframe based on the following criteria. For the same Assay if
+#the Centenarian - Healthy are Non-significant for the Threshold
+#AND Geriatric - Healthy are Significant for the Threshold
+#AND Centenarian - Geriatric are Significant for the Threshold
+#I keep the results, if no I remove the Assay.
+#In this way we are keeping the CENTENARIAN proteins sig different compare to GERIATRIC but similar to HEALTHY.
+
+cent_unique_filtered_anova_results_geneva_ticino <- anova_posthoc_data_geneva_ticino %>%
+  group_by(Assay) %>%
+  filter(
+    any(contrast == "Centenarian - Healthy" & Threshold == "Non-significant") &
+    any(contrast == "Geriatric - Healthy" & Threshold == "Significant") &
+    any(contrast == "Centenarian - Geriatric" & Threshold == "Significant")
+  ) %>%
+  ungroup()
+
+head(cent_unique_filtered_anova_results_geneva_ticino)
+# 
+# write.xlsx2(x = cent_unique_filtered_anova_results_geneva_ticino, file = "outputs/ANOVA_3Groups/2Sites/SWISS100_APH_3G_GENEVA_TICINO_filtered_CENT_unique.xlsx")
+# 
+# Extract unique assay names
+cent_unique_filtered_assay_list_geneva_ticino <- cent_unique_filtered_anova_results_geneva_ticino %>%
+  distinct(Assay) %>%
+  pull(Assay)
+
+cent_unique_filtered_assay_list_2_geneva_ticino <- 	paste(sprintf('"%s"', cent_unique_filtered_assay_list_geneva_ticino), collapse = ", ")
+
+# Print the unique assay names
+cat(cent_unique_filtered_assay_list_geneva_ticino, sep = "\n")
+cat(cent_unique_filtered_assay_list_2_geneva_ticino)
+
+```
+
+
+#Visualisation: ggplot_ViolinBoxplot Top proteins_Based on APH results filtered for CENT sig dif from GERIATRIC but not HEALTHY [Article_Fig_S3]
+```{r}
+# Filter dataframe based on the following criteria. For the same Assay if 
+#the Centenarian - Healthy are Non-significant for the Threshold 
+#AND Geriatric - Healthy are Significant for the Threshold 
+#AND Centenarian - Geriatric are Significant for the Threshold 
+#I keep the results, if no I remove the Assay. 
+#In this way we are keeping the CENTENARIAN proteins sig different compare to GERIATRIC but similar to HEALTHY.
+library(ggplot2)
+library(dplyr)
+
+#--------------------------------------------------------------------------------------------------------------
+raw_data <- data_geneva_ticino # contains your NPX values
+posthoc_results <- cent_unique_filtered_anova_results # contains your Adjusted_pval 
+proteins_list<- sort(cent_unique_filtered_assay_list) # Define your list of proteins of interest alphabetically
+#--------------------------------------------------------------------------------------------------------------
+
+merged_data <- raw_data %>%
+  left_join(posthoc_results, by = "Assay")
+print(merged_data)
+
+#--------------------------------------------------------------------------------------------------------------
+# Define the output directory
+output_dir <- "outputs/ANOVA_3Groups/2Sites/ViolinPlot/CENT_unique_signature_ggplot/"
+#--------------------------------------------------------------------------------------------------------------
+
+# Ensure the output directory exists
+if (!dir.exists(output_dir)) {
+  dir.create(output_dir, recursive = TRUE)
+}
+
+# Define the order of groups
+group_order <- c("Healthy", "Geriatric", "Centenarian")
+
+# Define the colors for each group
+group_colors <- c("Healthy" = '#93C83E', "Geriatric" = '#EE3224', "Centenarian" = '#007BA7')
+
+# Map group names to numeric positions
+group_positions <- setNames(1:length(group_order), group_order)
+
+# Initialize a list to store plots
+plot_list <- list()
+
+# Loop through each protein of interest and create a plot
+for (assay in cent_unique_filtered_assay_list) {
+  # Filter data for the current protein of interest
+  filtered_data <- merged_data %>%
+    filter(Assay == assay)
+
+  # Create the plot
+  plot <- ggplot(filtered_data, aes(x = Group, y = NPX, color = Group)) +
+    geom_violin(aes(fill = Group), alpha = 0.1) +  # Semi-transparent fill for violins
+    geom_jitter(width = 0.2, alpha = 0.6) +  # Add jittered points
+    geom_boxplot(width = 0.1, fill = "white") +
+    geom_segment(data = filtered_data %>% filter(Adjusted_pval < 0.05) %>%
+                   mutate(Group1 = group_positions[sub(" - .+", "", contrast)],
+                          Group2 = group_positions[sub(".+ - ", "", contrast)]),
+                 aes(x = Group1 - 0.1, xend = Group2 + 0.1,
+                     y = max(NPX) + 0.1, yend = max(NPX) + 0.1),
+                 color = "black") +
+    geom_text(data = filtered_data %>% filter(Adjusted_pval < 0.05) %>%
+                 mutate(Group1 = group_positions[sub(" - .+", "", contrast)],
+                        Group2 = group_positions[sub(".+ - ", "", contrast)]),
+              aes(x = (Group1 + Group2) / 2, y = max(NPX) + 0.2,
+                  label = paste("p FDR-adj =", format(Adjusted_pval, scientific = TRUE, digits = 3))),
+              vjust = -0.05, color = "black", check_overlap = TRUE, size = 3) +  # Adjust text size here
+    scale_color_manual(values = group_colors) +
+    scale_fill_manual(values = group_colors) +
+    scale_x_discrete(limits = group_order) +
+    coord_fixed(ratio = 1) +  # Ensure the aspect ratio is 1:1 for a square plot
+    theme_minimal() +
+    theme(
+      panel.background = element_rect(fill = "white", color = "black", size = 0.05),  # Add border around plot area
+      plot.background = element_rect(fill = "white", color = NA),  # Ensure plot background is white
+      panel.grid.major = element_blank(),
+      panel.grid.minor = element_blank(),
+      axis.line = element_line(color = "black"),
+      axis.text.x = element_text(face = "bold", size = 10),  # Make x-axis text bold and larger
+      axis.title.y = element_text(size = 10),  # Change y-axis title font size
+      legend.position = "none",  # Remove the legend
+      aspect.ratio = 1  # Enforce square aspect ratio
+    ) +
+    labs(title = paste(assay),
+         x = "",
+         y = "NPX")
+#--------------------------------------------------------------------------------------------------------------
+  # Save the individual plot with a white background
+  ggsave(filename = paste0(output_dir, "SWISS100_ViolinBoxPlot_APH_", assay, ".png"), plot = plot, width = 6, height = 6, bg = "white")
+#--------------------------------------------------------------------------------------------------------------  
+  # Print the plot
+  print(plot)
+
+  # Store the plot in the list
+  plot_list[[length(plot_list) + 1]] <- plot  # Ensure the plot is added as a list element
+}
+
+# Install and load patchwork if not already installed
+if (!requireNamespace("patchwork", quietly = TRUE)) {
+  install.packages("patchwork")
+}
+library(patchwork)
+
+# Split and combine plots in chunks of 9
+num_proteins <- length(plot_list)
+batch_size <- 9
+num_batches <- ceiling(num_proteins / batch_size)
+
+for (i in 1:num_batches) {
+  # Calculate start and end index for the current batch
+  start_idx <- (i - 1) * batch_size + 1
+  end_idx <- min(i * batch_size, num_proteins)
+
+  # Get the current batch of plots
+  current_batch <- plot_list[start_idx:end_idx]
+
+  # Combine the current batch into a 3x3 grid (or fewer if not enough plots)
+  combined_plot <- wrap_plots(current_batch, nrow = 3, ncol = 3)
+#--------------------------------------------------------------------------------------------------------------
+  # Save the combined plot with a white background
+  combined_filename <- paste0(output_dir, "Combined_SWISS100_ViolinBoxPlot_APH_filtered_batch_", i, ".png")
+  ggsave(combined_filename, plot = combined_plot, width = 20, height = 16, bg = "white")
+#--------------------------------------------------------------------------------------------------------------  
+  print(combined_plot)
+}
+
+```
+
