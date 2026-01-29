@@ -7,7 +7,7 @@ You can access the raw datasets directly from zenodo via the following link: [ht
 
 ---
 
-### Citation
+# Citation
 If you use this data or the associated analysis scripts in your research, please cite both the paper and the data repository:
 
 1. **Article:** [Insert your full paper citation here once published]
