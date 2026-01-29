@@ -1,13 +1,10 @@
-# SWISS100 Dataset
-
+# SWISS100 raw data access
 The raw proteomics data for this project is hosted on Zenodo to ensure long-term accessibility and reproducibility.
-
-### Data Access
 You can access the raw datasets directly from zenodo via the following link: [https://doi.org/10.5281/zenodo.18403090](https://doi.org/10.5281/zenodo.18403090)
 
 ---
 
-# Citation
+# Citation Paper and raw data
 If you use this data or the associated analysis scripts in your research, please cite both the paper and the data repository:
 
 1. **Article:** [Insert your full paper citation here once published]
