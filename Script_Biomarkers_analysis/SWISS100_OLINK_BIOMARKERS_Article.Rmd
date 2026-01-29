@@ -17,7 +17,10 @@ pacman::p_load(readxl,
 							 here,
 							 xlsx,
 							 gt,
-							 ComplexHeatmap)
+							 ComplexHeatmap,
+							 writexl,
+							 EnhancedVolcano,
+							 testthat)
 
 data1 <- read_excel("data/Univ_of_Geneve_Dept_of_Pathology_and_Immunology_NPX_2024-01-24.xlsx", sheet = "1.Group-sex-site (Text)")
 glimpse(data1)
@@ -763,6 +766,7 @@ for (i in 1:num_batches) {
 }
 
 ```
+
 
 
 
