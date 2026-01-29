@@ -684,7 +684,7 @@ group_positions <- setNames(1:length(group_order), group_order)
 plot_list <- list()
 
 # Loop through each protein of interest and create a plot
-for (assay in cent_unique_filtered_assay_list) {
+for (assay in proteins_list) {
   # Filter data for the current protein of interest
   filtered_data <- merged_data %>%
     filter(Assay == assay)
@@ -766,6 +766,7 @@ for (i in 1:num_batches) {
 }
 
 ```
+
 
 
 
