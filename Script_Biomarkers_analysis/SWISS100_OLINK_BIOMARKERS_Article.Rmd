@@ -32,11 +32,7 @@ print(data1)
 #Remove hemolysed samples identified by Firalis; Remove of NA
 data_all_cleaned <- filter(data1, `Plasma sample_ID` != "#N/A",
 													 QC_Warning !="EXCLUDED", 
-													 Assay_Warning !="EXCLUDED", 
-													 data1$`Plasma sample_ID` !="S100-VD-C-0368", #Hemolyzed
-													 data1$`Plasma sample_ID` !="S100-GE-G-0038", #Hemolyzed
-													 data1$`Plasma sample_ID` !="S100-GE-G-0059", #Hemolyzed
-													 data1$`Plasma sample_ID` !="S100-GE-H-0015", #Hemolyzed
+													 Assay_Warning !="EXCLUDED",
 													 data1$SampleID != "F2313550", #QC outliers : based on Interquartile ranges and sample median
 													 data1$SampleID != "F2313559", #QC outliers : based on Interquartile ranges and sample
 													 data1$SampleID != "F2313498", #QC outliers : based on Interquartile ranges and sample
@@ -767,5 +763,6 @@ for (i in 1:num_batches) {
 }
 
 ```
+
 
 
