@@ -12,5 +12,5 @@ You can access the raw datasets directly via the following DOI:
 If you use this data or the associated analysis scripts in your research, please cite both the paper and the data repository:
 
 1. **Article:** [Insert your full paper citation here once published]
-2. **Dataset:** Flavien Delhaes, Justine Falciola, Adar Hoffman, Stéphanie Carnesecchi, Stefano Cavalli, Armin von Gunten, Daniela S. Jopp, François R Herrmann and Karl-Heinz Krause (2026). *SWISS100_PROTEOMICS_NPX_Data*. Zenodo. https://doi.org/10.5281/zenodo.18403090
+2. **Dataset:** Delhaes, F. (2026). SWISS100_PROTEOMICS_NPX_Data. Zenodo. https://doi.org/10.5281/zenodo.18403090
 
