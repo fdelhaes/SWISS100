@@ -3,8 +3,7 @@
 The raw proteomics data for this project is hosted on Zenodo to ensure long-term accessibility and reproducibility.
 
 ### Data Access
-You can access the raw datasets directly via the following DOI:
-**Direct Link:** [https://doi.org/10.5281/zenodo.18403090](https://doi.org/10.5281/zenodo.18403090)
+You can access the raw datasets directly from zenodo via the following link: [https://doi.org/10.5281/zenodo.18403090](https://doi.org/10.5281/zenodo.18403090)
 
 ---
 
