@@ -14,4 +14,8 @@ Furthermore, applying fractional polynomial regressions, we uncovered proteins w
 SWISS100 website:
 https://wp.unil.ch/swiss100/
 
+# Link to the paper (Aging Cell)
+1. **Article:** Delhaes, F., Falciola, J., Hoffman, A., Carnesecchi, S., Cavalli, S., von Gunten, A., Jopp, D. S., Herrmann, F. R., & Krause, K.-H. (2026). Plasma proteome profiling of centenarian across Switzerland reveals key youth-associated proteins. Aging Cell. https://doi.org/10.1111/acel.70409
 
+# Link to the raw data (Zenodo)
+2. **Dataset:** Delhaes, F. (2026). SWISS100_PROTEOMICS_NPX_Data. Zenodo. https://doi.org/10.5281/zenodo.18403090
